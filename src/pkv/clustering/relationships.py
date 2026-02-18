@@ -27,7 +27,7 @@ def extract_relationships(
         collection = store.get_or_create_collection("documents")
         result = collection.get(ids=cluster.document_ids, include=["embeddings"])
 
-        if not result["embeddings"]:
+        if result["embeddings"] is None or len(result["embeddings"]) == 0:
             continue
 
         embeddings = np.array(result["embeddings"])

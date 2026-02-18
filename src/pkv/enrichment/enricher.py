@@ -43,7 +43,7 @@ class Enricher:
             doc_ids = cluster.document_ids[:max_docs]
             data = collection.get(ids=doc_ids, include=["documents", "metadatas"])
 
-            if not data["documents"]:
+            if data["documents"] is None or len(data["documents"]) == 0:
                 continue
 
             # Format documents for prompt
