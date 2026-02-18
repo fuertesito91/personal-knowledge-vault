@@ -64,8 +64,7 @@ class Enricher:
                     messages=[{"role": "user", "content": prompt}],
                 )
                 text = response.content[0].text
-                # Parse JSON from response
-                result = json.loads(text)
+                result = self._parse_json_response(text)
                 result["cluster_id"] = cluster.cluster_id
                 result["document_ids"] = cluster.document_ids
                 results.append(result)
@@ -73,13 +72,43 @@ class Enricher:
                 # Create entity pages for discovered entities
                 self._create_entity_pages(result.get("entities", []))
 
-            except (json.JSONDecodeError, Exception) as e:
+            except Exception as e:
                 results.append({
                     "cluster_id": cluster.cluster_id,
                     "error": str(e),
                 })
 
         return results
+
+    @staticmethod
+    def _parse_json_response(text: str) -> dict:
+        """Extract JSON from Claude's response, handling markdown code blocks."""
+        import re
+        # Try direct parse first
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting from ```json ... ``` or ``` ... ```
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # Try finding first { ... } block
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        # Give up, return raw text as label
+        return {"label": text[:100], "entities": [], "relationship_summary": text, "tags": []}
 
     def _create_entity_pages(self, entities: list[dict]) -> None:
         """Create vault pages for discovered entities."""
