@@ -31,19 +31,49 @@ def render_entity_page(entity_name: str, entity_type: str, properties: dict[str,
         "type": entity_type,
         "tags": [entity_type.lower()],
     }
-    fm.update(properties)
+    # Only put simple scalars in frontmatter
+    if properties.get("description"):
+        fm["description"] = properties["description"]
 
     parts = [render_frontmatter(fm)]
     parts.append(f"# {icon} {entity_name}\n")
     parts.append(f"**Type:** {entity_type}\n")
 
+    # Description
+    if properties.get("description"):
+        parts.append(f"## Description\n")
+        parts.append(f"{properties['description']}\n")
+
+    # Related entities as wikilinks
+    if properties.get("related_entities"):
+        parts.append(f"## Related Entities\n")
+        for entity in properties["related_entities"]:
+            parts.append(f"- [[{entity}]]")
+        parts.append("")
+
+    # Source documents as wikilinks
+    if properties.get("source_documents"):
+        parts.append(f"## Source Documents\n")
+        for doc in properties["source_documents"]:
+            parts.append(f"- [[{doc}]]")
+        parts.append("")
+
+    # Context (legacy/extra)
+    if properties.get("context"):
+        parts.append(f"## Context\n")
+        parts.append(f"{properties['context']}\n")
+
+    # Any remaining properties
+    skip_keys = {"description", "related_entities", "source_documents", "context"}
     for key, value in properties.items():
-        if value:
-            if isinstance(value, list):
-                parts.append(f"## {key.replace('_', ' ').title()}")
-                for item in value:
-                    parts.append(f"- [[{item}]]" if isinstance(item, str) else f"- {item}")
-            else:
-                parts.append(f"**{key.replace('_', ' ').title()}:** {value}")
+        if key in skip_keys or not value:
+            continue
+        if isinstance(value, list):
+            parts.append(f"## {key.replace('_', ' ').title()}\n")
+            for item in value:
+                parts.append(f"- [[{item}]]" if isinstance(item, str) else f"- {item}")
+            parts.append("")
+        else:
+            parts.append(f"**{key.replace('_', ' ').title()}:** {value}\n")
 
     return "\n".join(parts)

@@ -268,6 +268,35 @@ def stats(ctx):
 
 
 @cli.command()
+@click.argument("question")
+@click.option("--n", "-n", default=10, help="Number of context chunks to retrieve")
+@click.pass_context
+def ask(ctx, question, n):
+    """Ask a question and get an AI-synthesized answer from your vault."""
+    from .qa import ask_question
+    from rich.markdown import Markdown
+    from rich.panel import Panel
+
+    config = _get_config(ctx)
+    console.print(f"[blue]Searching vault for context...[/]\n")
+
+    try:
+        result = ask_question(question, config, n_chunks=n)
+    except ValueError as e:
+        console.print(f"[red]{e}[/]")
+        return
+
+    # Print answer
+    console.print(Panel(Markdown(result["answer"]), title="Answer", border_style="green"))
+
+    # Print sources
+    if result["sources"]:
+        console.print("\n[bold]📚 Sources:[/]")
+        for title in result["sources"]:
+            console.print(f"  • [[{title}]]")
+
+
+@cli.command()
 @click.pass_context
 def pipeline(ctx):
     """Run full pipeline: ingest → embed → cluster → enrich."""

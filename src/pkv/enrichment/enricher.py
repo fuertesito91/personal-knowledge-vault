@@ -138,9 +138,15 @@ class Enricher:
 
             file_path = target_dir / f"{safe_name}.md"
             if not file_path.exists():
+                properties = {
+                    "description": entity.get("description", ""),
+                    "related_entities": entity.get("related_entities", []),
+                    "source_documents": entity.get("source_documents", []),
+                    "context": entity.get("context", ""),
+                }
                 content = render_entity_page(
                     name, etype,
-                    {"context": entity.get("context", "")},
+                    properties,
                     icon=icon,
                 )
                 file_path.write_text(content, encoding="utf-8")

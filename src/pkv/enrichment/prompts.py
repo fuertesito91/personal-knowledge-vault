@@ -15,7 +15,7 @@ Respond in this exact JSON format:
 {{
   "label": "cluster label here",
   "entities": [
-    {{"name": "Entity Name", "type": "Person|Project|Topic|Organization", "mentions": 2}}
+    {{"name": "Entity Name", "type": "Person|Project|Topic|Organization", "mentions": 2, "description": "A concise summary of what/who this entity is based on the documents", "related_entities": ["Other Entity"], "source_documents": ["Document Title 1"]}}
   ],
   "relationship_summary": "summary here",
   "tags": ["tag1", "tag2", "tag3"]
