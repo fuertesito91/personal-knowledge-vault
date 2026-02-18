@@ -33,7 +33,7 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10) -> d
     context = "\n\n---\n\n".join(context_parts)
 
     client = anthropic.Anthropic(api_key=api_key)
-    model = config.get("claude_model", "claude-sonnet-4-20250514")
+    model = config.get("claude_model", "claude-opus-4-0725")
 
     response = client.messages.create(
         model=model,

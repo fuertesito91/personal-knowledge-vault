@@ -23,7 +23,7 @@ class Enricher:
 
         import anthropic
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = config.get("claude_model", "claude-sonnet-4-20250514")
+        self.model = config.get("claude_model", "claude-opus-4-0725")
         self.store = VectorStore(config["chroma_path"])
         self.ontology = OntologyManager()
 
