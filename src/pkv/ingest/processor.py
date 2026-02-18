@@ -39,6 +39,8 @@ def process_file(file_path: Path, config: dict[str, Any]) -> ProcessedDocument |
 
     # Determine entity type from source_type
     source_type = metadata.get("source_type", "text")
+    metadata["title"] = title
+    metadata["content_preview"] = content[:500]
     entity_type = _infer_entity_type(source_type, metadata)
 
     # Chunk
@@ -86,10 +88,18 @@ def _infer_entity_type(source_type: str, metadata: dict) -> str:
     """Infer the ontology entity type from source metadata."""
     if source_type == "conversation":
         return "Conversation"
-    if source_type == "pdf":
-        return "Document"
-    if source_type == "docx":
-        return "Document"
-    if "meeting" in metadata.get("title", "").lower():
+
+    # Check title and content for meeting indicators
+    title = (metadata.get("title", "") or "").lower()
+    content_preview = (metadata.get("content_preview", "") or "").lower()
+    text = f"{title} {content_preview}"
+
+    meeting_keywords = ["meeting", "standup", "stand-up", "sync", "check-in",
+                        "check in", "debrief", "handover", "hand-over", "retro",
+                        "sprint", "planning", "review", "retrospective",
+                        "notes by gemini", "transcript", "attendees", "participants",
+                        "action items", "minutes"]
+    if any(kw in text for kw in meeting_keywords):
         return "Meeting"
+
     return "Document"

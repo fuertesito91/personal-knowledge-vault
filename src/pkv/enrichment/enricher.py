@@ -129,7 +129,14 @@ class Enricher:
             target_dir = vault_path / folder
             target_dir.mkdir(parents=True, exist_ok=True)
 
-            file_path = target_dir / f"{name}.md"
+            # Sanitize name for filesystem (remove / \ : * ? " < > |)
+            import re
+            safe_name = re.sub(r'[<>:"/\\|?*]', ' - ', name)
+            safe_name = re.sub(r'\s+', ' ', safe_name).strip(". ")
+            if not safe_name:
+                continue
+
+            file_path = target_dir / f"{safe_name}.md"
             if not file_path.exists():
                 content = render_entity_page(
                     name, etype,
