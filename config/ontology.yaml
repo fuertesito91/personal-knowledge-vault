@@ -1,0 +1,42 @@
+# Ontology Definition for Personal Knowledge Vault
+# Defines entity types, their properties, and relationship types
+
+entities:
+  Person:
+    properties: [name, role, organization, notes]
+    folder: entities/people
+    icon: 👤
+  Project:
+    properties: [name, status, description, stakeholders]
+    folder: entities/projects
+    icon: 📋
+  Meeting:
+    properties: [date, participants, summary, decisions, action_items]
+    folder: meetings
+    icon: 🤝
+  Conversation:
+    properties: [date, platform, participants, summary, topics]
+    folder: conversations
+    icon: 💬
+  Topic:
+    properties: [name, description, related_topics]
+    folder: entities/topics
+    icon: 🏷️
+  Decision:
+    properties: [date, context, decision, rationale, stakeholders]
+    folder: decisions
+    icon: ⚖️
+  Document:
+    properties: [title, date, source, summary]
+    folder: documents
+    icon: 📄
+
+relationships:
+  - {from: Person, to: Project, type: works_on}
+  - {from: Person, to: Meeting, type: attended}
+  - {from: Person, to: Conversation, type: participated_in}
+  - {from: Meeting, to: Decision, type: produced}
+  - {from: Document, to: Topic, type: covers}
+  - {from: Conversation, to: Topic, type: discusses}
+  - {from: Project, to: Decision, type: informed_by}
+  - {from: Person, to: Person, type: collaborates_with}

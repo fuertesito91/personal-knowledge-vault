@@ -1,0 +1,38 @@
+# Personal Knowledge Vault - Configuration
+# Copy this to config.yaml and customize
+
+# Where the Obsidian vault is stored
+vault_path: ~/.pkv/vault
+
+# Where to drop files for ingestion
+ingest_path: ~/.pkv/ingest
+
+# Where ChromaDB stores vectors
+chroma_path: ~/.pkv/chroma
+
+# Embedding model (sentence-transformers compatible)
+embedding_model: intfloat/e5-large-v2
+
+# Claude API key for enrichment (optional)
+# Can also be set via ANTHROPIC_API_KEY environment variable
+# claude_api_key: sk-ant-...
+
+# Claude model for enrichment
+claude_model: claude-sonnet-4-20250514
+
+# Clustering parameters
+clustering:
+  min_samples: 3
+  xi: 0.05
+  min_cluster_size: 3
+
+# Chunking parameters
+chunking:
+  max_tokens: 500
+  overlap_tokens: 50
+  respect_boundaries: true
+
+# Enrichment
+enrichment:
+  max_clusters: 20
+  max_docs_per_cluster: 10
