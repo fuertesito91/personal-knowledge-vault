@@ -102,17 +102,73 @@ Your documents are now organized into folders (`documents/`, `conversations/`, `
 
 It's idempotent — re-running on the same files won't create duplicates.
 
-## Individual Commands
+## Pipeline Steps Explained
+
+You can run the full pipeline with `pkv pipeline`, or run each step individually:
+
+### `pkv init`
+
+Creates the PKV directory structure at `~/.pkv/`. This is your one-time setup:
+
+- `vault/` — Obsidian-compatible markdown vault (your knowledge base lives here)
+- `ingest/` — inbox folder where you drop files to process
+- `chroma/` — ChromaDB vector store for semantic search
+- `config.yaml` — settings (model, paths, clustering params, API keys)
+- `ontology.yaml` — entity types and relationship definitions
+
+Safe to re-run — won't overwrite existing files.
+
+### `pkv ingest`
+
+Processes files from your inbox (`~/.pkv/ingest/`) into the vault:
+
+1. **Reads** each file (markdown, PDF, DOCX, HTML, JSON, plain text)
+2. **Detects type** — meeting transcripts go to `meetings/`, chat exports to `conversations/`, everything else to `documents/`
+3. **Extracts metadata** — title, date, source path, content hash
+4. **Chunks** large documents into ~500-token pieces with overlap
+5. **Writes** markdown files with YAML frontmatter into the vault
+
+Idempotent — same file won't be ingested twice (SHA256 content hashing).
+
+### `pkv embed`
+
+Vectorizes all documents using the [e5-large-v2](https://huggingface.co/intfloat/e5-large-v2) embedding model:
+
+1. **Scans** the vault for unembedded documents
+2. **Generates** 1024-dimensional embeddings for each chunk
+3. **Stores** vectors in ChromaDB (local, no external API)
+
+First run downloads the model (~1.3GB). Subsequent runs only embed new/changed documents.
+
+### `pkv cluster`
+
+Finds hidden relationships between documents using [OPTICS](https://en.wikipedia.org/wiki/OPTICS_algorithm) clustering:
+
+1. **Retrieves** all embeddings from ChromaDB
+2. **Runs** OPTICS density-based clustering (finds natural groupings without needing a fixed cluster count)
+3. **Labels** each cluster and writes cluster metadata to the vault
+
+Documents that cover similar topics end up in the same cluster, even if they were ingested from completely different sources.
+
+### `pkv enrich`
+
+**Optional** — requires a Claude API key. Uses AI to enhance your vault:
+
+1. **Reads** each cluster's documents
+2. **Extracts entities** — people, projects, topics, decisions mentioned across documents
+3. **Creates entity pages** with `[[wikilinks]]` connecting them to source documents
+4. **Labels clusters** with human-readable summaries
+5. **Maps relationships** between entities (e.g., Person → works_on → Project)
+
+This is the step that turns a pile of documents into a connected knowledge graph you can browse in Obsidian.
+
+### Other Commands
 
 ```bash
-# Run steps individually instead of `pkv pipeline`
-pkv ingest              # Process files from inbox
-pkv embed               # Embed all unembedded documents
-pkv cluster             # Find relationships via OPTICS
-pkv enrich              # Claude AI enrichment (optional)
-pkv search "query"      # Semantic search
-pkv janitor             # Dedup + fix frontmatter
-pkv stats               # Show vault statistics
+pkv search "query"      # Semantic search across all documents
+pkv pipeline            # Run ingest → embed → cluster → enrich in one go
+pkv janitor             # Dedup chunks + fix frontmatter issues
+pkv stats               # Show vault statistics (doc count, embeddings, clusters)
 ```
 
 ## Configuration
