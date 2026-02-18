@@ -52,7 +52,10 @@ def init(ctx, path):
         cfg["vault_path"] = str(vault_path / "vault")
         cfg["ingest_path"] = str(vault_path / "ingest")
         cfg["chroma_path"] = str(vault_path / "chroma")
-        config_file.write_text(yaml.dump(cfg, default_flow_style=False))
+        config_text = yaml.dump(cfg, default_flow_style=False)
+        # Add commented claude_api_key at the top
+        config_text = "# Claude API key for enrichment (or set ANTHROPIC_API_KEY env var)\n# claude_api_key: sk-ant-your-key-here\n\n" + config_text
+        config_file.write_text(config_text)
         console.print(f"  Created config: {config_file}")
 
     # Copy ontology
