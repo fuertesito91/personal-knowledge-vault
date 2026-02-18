@@ -32,64 +32,88 @@ Ingest (drop anything)  →  Process/Chunk  →  Obsidian Vault (markdown + fron
 - Python 3.10+
 - [Obsidian](https://obsidian.md/) (optional, for viewing the vault)
 
-## Installation
+## Installation & Setup
+
+### Step 1: Clone and install
 
 ```bash
-# Clone
 git clone https://github.com/fuertesito91/personal-knowledge-vault.git
 cd personal-knowledge-vault
 
-# Install in development mode
-pip install -e .
+# Create a virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 
-# Or install from PyPI (when published)
-# pip install personal-knowledge-vault
+# Install
+pip install -e .
 ```
 
-## Quick Start
+### Step 2: Initialize your vault
 
 ```bash
-# 1. Initialize vault
 pkv init
+```
 
-# 2. Drop files into ~/.pkv/ingest/
-cp my-notes.md ~/.pkv/ingest/
-cp chatgpt-export.json ~/.pkv/ingest/
-cp research-paper.pdf ~/.pkv/ingest/
+This creates everything under `~/.pkv/`:
+- `vault/` — your Obsidian vault (markdown files live here)
+- `ingest/` — your inbox (drop files here to process them)
+- `chroma/` — vector store (semantic search index)
+- `config.yaml` — configuration
 
-# 3. Run ingestion
-pkv ingest
+### Step 3: Set up Claude enrichment (optional)
 
-# 4. Embed documents
-pkv embed
-
-# 5. Search
-pkv search "machine learning applications"
-
-# 6. Run clustering
-pkv cluster
-
-# 7. (Optional) Enrich with Claude
+```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-pkv enrich
+```
 
-# Or run everything at once:
+Or add `claude_api_key: sk-ant-...` to `~/.pkv/config.yaml`.
+
+### Step 4: Open the vault in Obsidian
+
+1. Download & install [Obsidian](https://obsidian.md/)
+2. Open Obsidian → **"Open folder as vault"**
+3. Point it to `~/.pkv/vault`
+4. Keep it open — it updates live as you ingest content
+
+### Step 5: Drop your files and run
+
+```bash
+# Drop any files into the inbox
+cp ~/meeting-notes.md ~/.pkv/ingest/
+cp ~/chatgpt-export.json ~/.pkv/ingest/
+cp ~/report.pdf ~/.pkv/ingest/
+
+# Run the full pipeline (ingest → embed → cluster → enrich)
 pkv pipeline
 ```
 
-## CLI Reference
+First run downloads the e5-large embedding model (~1.3GB) — after that it's cached.
 
-| Command | Description |
-|---------|-------------|
-| `pkv init [--path PATH]` | Initialize vault + config |
-| `pkv ingest [PATH]` | Process files from ingest dir or specific path |
-| `pkv embed` | Embed all unembedded documents |
-| `pkv search "query" [-n N]` | Semantic search (default 5 results) |
-| `pkv cluster` | Run OPTICS clustering |
-| `pkv enrich` | Claude AI enrichment on clusters |
-| `pkv janitor` | Dedup + fix frontmatter |
-| `pkv stats` | Show vault statistics |
-| `pkv pipeline` | Full pipeline: ingest → embed → cluster → enrich |
+### Step 6: Browse in Obsidian
+
+Your documents are now organized into folders (`documents/`, `conversations/`, `meetings/`, etc.) with YAML frontmatter, `[[wikilinks]]` between entities, and auto-generated entity pages.
+
+### Day-to-day usage
+
+1. **Drop files** into `~/.pkv/ingest/`
+2. **Run** `pkv pipeline`
+3. **Search** with `pkv search "whatever you're looking for"`
+4. **Browse** in Obsidian
+
+It's idempotent — re-running on the same files won't create duplicates.
+
+## Individual Commands
+
+```bash
+# Run steps individually instead of `pkv pipeline`
+pkv ingest              # Process files from inbox
+pkv embed               # Embed all unembedded documents
+pkv cluster             # Find relationships via OPTICS
+pkv enrich              # Claude AI enrichment (optional)
+pkv search "query"      # Semantic search
+pkv janitor             # Dedup + fix frontmatter
+pkv stats               # Show vault statistics
+```
 
 ## Configuration
 
