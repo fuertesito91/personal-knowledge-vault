@@ -17,7 +17,7 @@ def run_clustering(config: dict[str, Any]) -> list[ClusterResult]:
     store = VectorStore(config["chroma_path"])
     data = store.get_all("documents")
 
-    if not data["ids"] or not data["embeddings"]:
+    if data["ids"] is None or len(data["ids"]) == 0 or data["embeddings"] is None or len(data["embeddings"]) == 0:
         return []
 
     embeddings = np.array(data["embeddings"])
