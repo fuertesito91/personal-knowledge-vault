@@ -30,5 +30,5 @@ config/config.yaml
 Thumbs.db
 
 # Data
-ingest/
+/*.pkv/
 *.pkl
