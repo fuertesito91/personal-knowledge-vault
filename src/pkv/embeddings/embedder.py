@@ -35,11 +35,18 @@ class Embedder:
         texts = []
         metadatas = []
 
+        seen_ids = set()
         for doc in docs:
             for chunk in doc.chunks:
+                # Use source path + chunk index + content hash for uniqueness
                 chunk_id = hashlib.sha256(
-                    f"{doc.content_hash}:{chunk.index}".encode()
-                ).hexdigest()[:16]
+                    f"{doc.source_path}:{doc.content_hash}:{chunk.index}".encode()
+                ).hexdigest()[:32]
+
+                # Skip duplicates within this batch
+                if chunk_id in seen_ids:
+                    continue
+                seen_ids.add(chunk_id)
 
                 # Skip already embedded
                 if self.store.has_id(collection, chunk_id):
