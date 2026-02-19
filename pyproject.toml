@@ -29,6 +29,7 @@ dependencies = [
     "python-docx>=0.8",
     "beautifulsoup4>=4.12",
     "lxml>=4.9",
+    "watchdog>=3.0",
 ]
 
 [project.scripts]

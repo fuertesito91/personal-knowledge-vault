@@ -317,5 +317,18 @@ def pipeline(ctx):
     console.print("\n[bold green]✓ Pipeline complete![/]")
 
 
+@cli.command()
+@click.option("--enrich", is_flag=True, default=False, help="Also run enrichment (costs API calls)")
+@click.option("--debounce", default=5.0, help="Seconds to wait after last change before processing")
+@click.pass_context
+def watch(ctx, enrich, debounce):
+    """Watch ~/.pkv/ingest/ for new files and auto-run pipeline."""
+    from .watcher import FileWatcher
+
+    config = _get_config(ctx)
+    watcher = FileWatcher(config, enrich=enrich, debounce=debounce)
+    watcher.run()
+
+
 if __name__ == "__main__":
     cli()
