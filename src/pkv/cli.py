@@ -318,7 +318,7 @@ def pipeline(ctx):
 
 
 @cli.command()
-@click.option("--enrich", is_flag=True, default=False, help="Also run enrichment (costs API calls)")
+@click.option("--enrich/--no-enrich", default=True, help="Run enrichment (default: on, use --no-enrich to skip)")
 @click.option("--debounce", default=5.0, help="Seconds to wait after last change before processing")
 @click.pass_context
 def watch(ctx, enrich, debounce):
