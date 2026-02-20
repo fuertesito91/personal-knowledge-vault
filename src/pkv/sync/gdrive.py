@@ -28,11 +28,18 @@ class GDriveSync:
     @property
     def service(self):
         if self._service is None:
-            from google.oauth2 import credentials as _  # noqa: ensure google-auth available
             import google.auth
             from googleapiclient.discovery import build
 
-            creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/drive.file"])
+            # ADC scopes are fixed at login time. Request broad scopes
+            # but the actual scopes depend on what was granted during
+            # `gcloud auth application-default login --scopes=...`
+            creds, project = google.auth.default(
+                scopes=[
+                    "https://www.googleapis.com/auth/cloud-platform",
+                    "https://www.googleapis.com/auth/drive",
+                ]
+            )
             self._service = build("drive", "v3", credentials=creds)
         return self._service
 
@@ -115,6 +122,14 @@ class GDriveSync:
         """Sync vault to Drive. Returns stats."""
         if not self.vault_path.exists():
             return {"uploaded": 0, "skipped": 0, "errors": 0}
+
+        # Verify folder access first
+        try:
+            self.service.files().get(fileId=self.vault_folder_id, fields="id,name").execute()
+        except Exception as e:
+            import sys
+            print(f"  ✗ Cannot access Drive folder '{self.vault_folder_id}': {e}", file=sys.stderr)
+            return {"uploaded": 0, "skipped": 0, "errors": 1}
 
         state = self._load_state()
         new_state = {}
