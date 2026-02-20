@@ -140,6 +140,11 @@ class GDriveSync:
                 stats["uploaded"] += 1
             except Exception as e:
                 stats["errors"] += 1
+                if stats["errors"] <= 3:  # Print first 3 errors
+                    import sys
+                    print(f"  ✗ {rel_str}: {e}", file=sys.stderr)
+                elif stats["errors"] == 4:
+                    print("  ... (suppressing further errors)", file=sys.stderr)
                 # Don't save hash so it retries next time
                 new_state[rel_str] = ""
 
