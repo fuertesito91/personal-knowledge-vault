@@ -303,6 +303,66 @@ entities: [John Smith, Project Alpha]
 - 🌐 Web UI
 - 📧 More parsers (email .eml, .epub, audio transcripts)
 
+## GCP Backends (Optional)
+
+PKV supports optional cloud backends for access from anywhere. Install GCP dependencies:
+
+```bash
+pip install -e ".[gcp]"
+```
+
+### BigQuery Vector Store
+
+Use BigQuery instead of ChromaDB for vector storage:
+
+1. **Authenticate:**
+   ```bash
+   gcloud auth application-default login
+   ```
+
+2. **Update `config.yaml`:**
+   ```yaml
+   storage_backend: bigquery
+   bigquery:
+     project: ozpr-reporting-dev
+     dataset: dbt_oriol
+     table: pkv_oriol
+   ```
+
+3. The table is created automatically on first use. All existing commands (`pkv embed`, `pkv search`, `pkv ask`, etc.) work transparently with BigQuery.
+
+**Notes:**
+- Uses brute-force cosine similarity — fast enough for <10K chunks
+- For larger scales, consider adding a `VECTOR_INDEX` manually
+- Application Default Credentials are used (no service account files needed)
+
+### Google Drive Vault Sync
+
+One-way sync: local vault → Google Drive.
+
+1. **Authenticate** (same as above, needs Drive scope):
+   ```bash
+   gcloud auth application-default login --scopes="https://www.googleapis.com/auth/drive.file,https://www.googleapis.com/auth/cloud-platform"
+   ```
+
+2. **Create a folder in Google Drive** for your vault, copy its folder ID from the URL.
+
+3. **Update `config.yaml`:**
+   ```yaml
+   vault_sync: gdrive
+   gdrive:
+     vault_folder_id: "your-drive-folder-id"
+   ```
+
+4. **Sync manually or automatically:**
+   ```bash
+   pkv sync           # manual sync
+   pkv pipeline       # sync runs after enrich
+   pkv watch          # sync runs after each batch
+   ```
+
+Drive sync tracks content hashes to avoid re-uploading unchanged files. Subfolder structure (documents/, meetings/, entities/, etc.) is mirrored in Drive.
+
 ## License
 
 MIT

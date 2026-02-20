@@ -133,6 +133,16 @@ class FileWatcher:
             except Exception as e:
                 console.print(f"  [red]✗ Enrichment failed: {e}[/]")
 
+        # 6. Sync to Drive if enabled
+        if self.config.get("vault_sync", "local") == "gdrive":
+            try:
+                from .sync.gdrive import GDriveSync
+                syncer = GDriveSync(self.config)
+                stats = syncer.sync()
+                console.print(f"  [green]✓ Drive sync: {stats['uploaded']} uploaded[/]")
+            except Exception as e:
+                console.print(f"  [red]✗ Drive sync failed: {e}[/]")
+
         console.print("[bold green]✓ Batch complete![/]\n")
         console.print("[dim]👀 Watching for more files...[/]")
 

@@ -3,7 +3,7 @@
 import numpy as np
 from typing import Any
 
-from ..embeddings.store import VectorStore
+from ..storage import get_vector_store
 from ..models import ClusterResult
 
 
@@ -14,7 +14,7 @@ def run_clustering(config: dict[str, Any]) -> list[ClusterResult]:
     """
     from sklearn.cluster import OPTICS
 
-    store = VectorStore(config["chroma_path"])
+    store = get_vector_store(config)
     data = store.get_all("documents")
 
     if data["ids"] is None or len(data["ids"]) == 0 or data["embeddings"] is None or len(data["embeddings"]) == 0:

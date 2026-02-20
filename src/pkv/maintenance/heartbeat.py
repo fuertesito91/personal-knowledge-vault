@@ -46,8 +46,8 @@ def vault_stats(config: dict[str, Any]) -> dict[str, Any]:
 
     # ChromaDB stats
     try:
-        from ..embeddings.store import VectorStore
-        store = VectorStore(config["chroma_path"])
+        from ..storage import get_vector_store
+        store = get_vector_store(config)
         stats["embedded_chunks"] = store.count("documents")
     except Exception:
         stats["embedded_chunks"] = 0

@@ -5,7 +5,7 @@ from itertools import combinations
 from typing import Any
 
 from ..models import ClusterResult, Relationship
-from ..embeddings.store import VectorStore
+from ..storage import get_vector_store
 
 
 def extract_relationships(
@@ -16,7 +16,7 @@ def extract_relationships(
 
     For each cluster, compute pairwise similarity between members.
     """
-    store = VectorStore(config["chroma_path"])
+    store = get_vector_store(config)
     relationships = []
 
     for cluster in clusters:

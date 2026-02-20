@@ -3,7 +3,7 @@
 import json
 from typing import Any
 
-from ..embeddings.store import VectorStore
+from ..storage import get_vector_store
 from ..models import ClusterResult
 from ..vault.ontology import OntologyManager
 from ..vault.templates import render_entity_page
@@ -24,7 +24,7 @@ class Enricher:
         import anthropic
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = config.get("claude_model", "claude-opus-4-0725")
-        self.store = VectorStore(config["chroma_path"])
+        self.store = get_vector_store(config)
         self.ontology = OntologyManager()
 
     def enrich_clusters(self, clusters: list[ClusterResult]) -> list[dict[str, Any]]:

@@ -7,15 +7,15 @@ from typing import Any
 from rich.progress import Progress
 
 from ..models import ProcessedDocument
-from .store import VectorStore
+from ..storage import get_vector_store
 
 
 class Embedder:
-    """Embeds documents using sentence-transformers and stores in ChromaDB."""
+    """Embeds documents using sentence-transformers and stores in a vector backend."""
 
     def __init__(self, config: dict[str, Any]):
         self.model_name = config.get("embedding_model", "intfloat/e5-large-v2")
-        self.store = VectorStore(config["chroma_path"])
+        self.store = get_vector_store(config)
         self._model = None
 
     @property

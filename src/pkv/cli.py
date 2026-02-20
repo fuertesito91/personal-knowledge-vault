@@ -53,8 +53,24 @@ def init(ctx, path):
         cfg["ingest_path"] = str(vault_path / "ingest")
         cfg["chroma_path"] = str(vault_path / "chroma")
         config_text = yaml.dump(cfg, default_flow_style=False)
-        # Add commented claude_api_key at the top
-        config_text = "# Claude API key for enrichment (or set ANTHROPIC_API_KEY env var)\n# claude_api_key: sk-ant-your-key-here\n\n" + config_text
+        # Add commented options at the top
+        header = (
+            "# Claude API key for enrichment (or set ANTHROPIC_API_KEY env var)\n"
+            "# claude_api_key: sk-ant-your-key-here\n\n"
+            "# Storage backend: chromadb (local) or bigquery (cloud)\n"
+            "storage_backend: chromadb\n\n"
+            "# BigQuery settings (when storage_backend: bigquery)\n"
+            "# bigquery:\n"
+            "#   project: ozpr-reporting-dev\n"
+            "#   dataset: dbt_oriol\n"
+            "#   table: pkv_oriol\n\n"
+            "# Vault sync: local or gdrive\n"
+            "vault_sync: local\n\n"
+            "# Google Drive settings (when vault_sync: gdrive)\n"
+            "# gdrive:\n"
+            '#   vault_folder_id: "your-drive-folder-id"\n\n'
+        )
+        config_text = header + config_text
         config_file.write_text(config_text)
         console.print(f"  Created config: {config_file}")
 
@@ -314,7 +330,41 @@ def pipeline(ctx):
     else:
         console.print("[dim]Skipping enrichment (no API key set)[/]")
 
+    # Sync to Drive if enabled
+    _run_sync_if_enabled(config)
+
     console.print("\n[bold green]✓ Pipeline complete![/]")
+
+
+@cli.command()
+@click.pass_context
+def sync(ctx):
+    """Sync vault to Google Drive (when vault_sync: gdrive)."""
+    config = _get_config(ctx)
+    if config.get("vault_sync", "local") != "gdrive":
+        console.print("[yellow]vault_sync is not set to 'gdrive' in config. Nothing to do.[/]")
+        return
+    from .sync.gdrive import GDriveSync
+    try:
+        syncer = GDriveSync(config)
+    except ValueError as e:
+        console.print(f"[red]{e}[/]")
+        return
+    console.print("[blue]Syncing vault to Google Drive...[/]")
+    stats = syncer.sync()
+    console.print(f"[green]✓ Sync complete — uploaded: {stats['uploaded']}, skipped: {stats['skipped']}, errors: {stats['errors']}[/]")
+
+
+def _run_sync_if_enabled(config: dict):
+    """Run Drive sync if enabled in config."""
+    if config.get("vault_sync", "local") == "gdrive":
+        try:
+            from .sync.gdrive import GDriveSync
+            syncer = GDriveSync(config)
+            stats = syncer.sync()
+            console.print(f"  [green]✓ Drive sync: {stats['uploaded']} uploaded[/]")
+        except Exception as e:
+            console.print(f"  [red]✗ Drive sync failed: {e}[/]")
 
 
 @cli.command()
