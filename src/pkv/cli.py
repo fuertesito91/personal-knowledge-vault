@@ -369,11 +369,11 @@ def _run_sync_if_enabled(config: dict):
 
 @cli.command("sync-chroma")
 @click.option("--host", default=None, help="Remote host (user@hostname)")
-@click.option("--dest", default=None, help="Remote chroma path (default: ~/.pkv/chroma)")
+@click.option("--dest", default=None, help="Remote PKV base path (default: ~/.pkv)")
 @click.option("--dry-run", is_flag=True, help="Show what would be synced without copying")
 @click.pass_context
 def sync_chroma(ctx, host, dest, dry_run):
-    """Push local ChromaDB to a remote machine via rsync over SSH."""
+    """Push local PKV data (vault + chroma + config) to a remote machine via rsync over SSH."""
     import subprocess
 
     config = _get_config(ctx)
@@ -381,36 +381,39 @@ def sync_chroma(ctx, host, dest, dry_run):
     # Get settings from config or CLI args
     remote_cfg = config.get("sync_chroma", {})
     remote_host = host or remote_cfg.get("host")
-    remote_dest = dest or remote_cfg.get("dest", "~/.pkv/chroma")
+    remote_dest = dest or remote_cfg.get("dest", "~/.pkv")
 
     if not remote_host:
         console.print("[red]No remote host specified. Use --host or set sync_chroma.host in config.yaml[/]")
         console.print("[dim]Example: pkv sync-chroma --host fuertesito@Oriols-MacBook-Pro.local[/]")
         return
 
+    # Resolve local PKV base (parent of chroma_path)
     local_chroma = Path(config["chroma_path"]).expanduser().resolve()
-    if not local_chroma.exists():
-        console.print(f"[red]Local chroma not found: {local_chroma}[/]")
+    local_pkv = local_chroma.parent  # ~/.pkv
+    if not local_pkv.exists():
+        console.print(f"[red]Local PKV directory not found: {local_pkv}[/]")
         return
 
     target = f"{remote_host}:{remote_dest}"
     cmd = [
         "rsync", "-az", "--delete",
         "--progress",
-        str(local_chroma) + "/",
+        "--exclude", "ingest/",  # no need to sync pending ingestion files
+        str(local_pkv) + "/",
         target + "/",
     ]
     if dry_run:
         cmd.insert(1, "--dry-run")
 
-    console.print(f"[blue]{'[DRY RUN] ' if dry_run else ''}Syncing chroma → {target}[/]")
-    console.print(f"  Local:  {local_chroma}")
+    console.print(f"[blue]{'[DRY RUN] ' if dry_run else ''}Syncing PKV → {target}[/]")
+    console.print(f"  Local:  {local_pkv}")
     console.print(f"  Remote: {target}\n")
 
     try:
         result = subprocess.run(cmd, check=True)
         if result.returncode == 0:
-            console.print(f"\n[green]✓ {'Dry run complete' if dry_run else 'Chroma synced successfully'}[/]")
+            console.print(f"\n[green]✓ {'Dry run complete' if dry_run else 'PKV synced successfully (vault + chroma + config)'}[/]")
     except subprocess.CalledProcessError as e:
         console.print(f"\n[red]✗ rsync failed (exit {e.returncode})[/]")
         console.print("[dim]Check SSH access: ssh {remote_host} echo ok[/]")
