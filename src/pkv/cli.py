@@ -396,7 +396,7 @@ def sync_chroma(ctx, host, dest, dry_run):
     target = f"{remote_host}:{remote_dest}"
     cmd = [
         "rsync", "-az", "--delete",
-        "--info=progress2",
+        "--progress",
         str(local_chroma) + "/",
         target + "/",
     ]
