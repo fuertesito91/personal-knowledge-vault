@@ -367,6 +367,57 @@ def _run_sync_if_enabled(config: dict):
             console.print(f"  [red]✗ Drive sync failed: {e}[/]")
 
 
+@cli.command("sync-chroma")
+@click.option("--host", default=None, help="Remote host (user@hostname)")
+@click.option("--dest", default=None, help="Remote chroma path (default: ~/.pkv/chroma)")
+@click.option("--dry-run", is_flag=True, help="Show what would be synced without copying")
+@click.pass_context
+def sync_chroma(ctx, host, dest, dry_run):
+    """Push local ChromaDB to a remote machine via rsync over SSH."""
+    import subprocess
+
+    config = _get_config(ctx)
+
+    # Get settings from config or CLI args
+    remote_cfg = config.get("sync_chroma", {})
+    remote_host = host or remote_cfg.get("host")
+    remote_dest = dest or remote_cfg.get("dest", "~/.pkv/chroma")
+
+    if not remote_host:
+        console.print("[red]No remote host specified. Use --host or set sync_chroma.host in config.yaml[/]")
+        console.print("[dim]Example: pkv sync-chroma --host fuertesito@Oriols-MacBook-Pro.local[/]")
+        return
+
+    local_chroma = Path(config["chroma_path"]).expanduser().resolve()
+    if not local_chroma.exists():
+        console.print(f"[red]Local chroma not found: {local_chroma}[/]")
+        return
+
+    target = f"{remote_host}:{remote_dest}"
+    cmd = [
+        "rsync", "-az", "--delete",
+        "--info=progress2",
+        str(local_chroma) + "/",
+        target + "/",
+    ]
+    if dry_run:
+        cmd.insert(1, "--dry-run")
+
+    console.print(f"[blue]{'[DRY RUN] ' if dry_run else ''}Syncing chroma → {target}[/]")
+    console.print(f"  Local:  {local_chroma}")
+    console.print(f"  Remote: {target}\n")
+
+    try:
+        result = subprocess.run(cmd, check=True)
+        if result.returncode == 0:
+            console.print(f"\n[green]✓ {'Dry run complete' if dry_run else 'Chroma synced successfully'}[/]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"\n[red]✗ rsync failed (exit {e.returncode})[/]")
+        console.print("[dim]Check SSH access: ssh {remote_host} echo ok[/]")
+    except FileNotFoundError:
+        console.print("[red]rsync not found. Install with: brew install rsync[/]")
+
+
 @cli.command()
 @click.option("--enrich/--no-enrich", default=True, help="Run enrichment (default: on, use --no-enrich to skip)")
 @click.option("--debounce", default=5.0, help="Seconds to wait after last change before processing")
