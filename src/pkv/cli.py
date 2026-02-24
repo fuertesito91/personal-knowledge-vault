@@ -449,7 +449,14 @@ def sync_bq(ctx, collection):
         return
 
     # Get embeddings too
+    import numpy as np
     all_data = chroma.get_by_ids(collection, data["ids"], include=["documents", "metadatas", "embeddings"])
+    # Convert numpy arrays to plain lists for JSON serialization
+    if all_data.get("embeddings"):
+        all_data["embeddings"] = [
+            e.tolist() if isinstance(e, np.ndarray) else list(e)
+            for e in all_data["embeddings"]
+        ]
 
     batch_size = 500
     synced = 0

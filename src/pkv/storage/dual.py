@@ -7,9 +7,16 @@ BigQuery is the cloud mirror (remote access, analytics).
 import logging
 from typing import Any
 
+import numpy as np
+
 from .base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
+
+
+def _to_lists(embeddings: list) -> list[list[float]]:
+    """Convert numpy arrays to plain lists for JSON serialization."""
+    return [e.tolist() if isinstance(e, np.ndarray) else list(e) for e in embeddings]
 
 
 class DualVectorStore(VectorStoreBase):
@@ -35,7 +42,7 @@ class DualVectorStore(VectorStoreBase):
         self.primary.add_documents(collection_name, ids, embeddings, documents, metadatas)
         # Then mirror to secondary
         try:
-            self.secondary.add_documents(collection_name, ids, embeddings, documents, metadatas)
+            self.secondary.add_documents(collection_name, ids, _to_lists(embeddings), documents, metadatas)
         except Exception as e:
             logger.warning(f"Secondary store write failed (will retry on next sync): {e}")
 
