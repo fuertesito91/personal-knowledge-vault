@@ -21,9 +21,14 @@ Ingest (drop anything)  →  Process/Chunk  →  Obsidian Vault (markdown + fron
 - **Source-agnostic ingestion**: Drop markdown, text, PDF, DOCX, HTML, JSON (including ChatGPT/Claude exports) — it all gets processed
 - **Obsidian-native**: Everything stored as markdown with YAML frontmatter and `[[wikilinks]]`
 - **Ontology system**: Configurable entity types (Person, Project, Meeting, etc.) with typed relationships
-- **Semantic search**: Vector-based search using e5-large embeddings + ChromaDB
+- **Semantic search**: Vector-based search using e5-large embeddings + ChromaDB, with `--since` date filtering
+- **RAG Q&A**: Ask natural language questions, get Claude-synthesized answers from your vault (`pkv ask`)
+- **File watcher**: Auto-ingest on file drop with `pkv watch` (debounced, uses watchdog)
 - **Automatic clustering**: OPTICS finds hidden connections between documents
 - **AI enrichment**: Claude labels clusters, extracts entities, creates relationship pages
+- **Dual storage**: ChromaDB (local) + BigQuery (cloud) kept in sync automatically
+- **Remote sync**: `pkv sync-chroma` pushes vault to an always-on machine for phone/Telegram queries
+- **Date-aware**: Extracts document dates from filenames (Gemini meeting notes, etc.) for temporal queries
 - **Idempotent**: Re-running on same files won't create duplicates (SHA256 content hashing)
 - **Local-first**: All data on disk. Claude API is optional, only for enrichment.
 
@@ -96,9 +101,10 @@ Your documents are now organized into folders (`documents/`, `conversations/`, `
 ### Day-to-day usage
 
 1. **Drop files** into `~/.pkv/ingest/`
-2. **Run** `pkv pipeline`
+2. **Run** `pkv pipeline` (or `pkv watch` for auto-processing)
 3. **Search** with `pkv search "whatever you're looking for"`
-4. **Browse** in Obsidian
+4. **Ask** with `pkv ask "what did we decide about X?"`
+5. **Browse** in Obsidian
 
 It's idempotent — re-running on the same files won't create duplicates.
 
@@ -162,10 +168,89 @@ Documents that cover similar topics end up in the same cluster, even if they wer
 
 This is the step that turns a pile of documents into a connected knowledge graph you can browse in Obsidian.
 
+### `pkv search "query"`
+
+Semantic search across all embedded documents:
+
+```bash
+pkv search "quarterly revenue targets"
+pkv search "action items from standup" --since today
+pkv search "product roadmap decisions" --since week
+pkv search "budget discussion" --since 2026-02-01
+```
+
+Options:
+- `--n 10` — number of results (default: 5)
+- `--since today|yesterday|week|YYYY-MM-DD` — filter by document date
+
+### `pkv ask "question"`
+
+RAG-powered Q&A — searches the vault, then synthesizes an answer using Claude:
+
+```bash
+pkv ask "what were the key decisions from last week's meetings?"
+pkv ask "what did we decide about the attribution model?" --since week
+pkv ask "summarize today's meetings" --since today
+```
+
+Options:
+- `--n 10` — number of context chunks to retrieve (default: 10)
+- `--since today|yesterday|week|YYYY-MM-DD` — filter by document date
+
+Requires `ANTHROPIC_API_KEY` or `claude_api_key` in config.
+
+### `pkv list-docs`
+
+List all unique documents in the vault with dates and types:
+
+```bash
+pkv list-docs                    # all documents
+pkv list-docs --since today      # what was added today
+pkv list-docs --since week       # last 7 days
+```
+
+### `pkv watch`
+
+File watcher — monitors `~/.pkv/ingest/` and auto-runs the pipeline when files are dropped:
+
+```bash
+pkv watch                        # with enrichment
+pkv watch --no-enrich            # skip Claude enrichment
+pkv watch --debounce 10          # wait 10s after last change before processing
+```
+
+Uses `watchdog` for filesystem events. Debounces rapid changes so bulk file drops are batched.
+
+### `pkv sync-chroma`
+
+Push local PKV data (vault + chroma + config) to a remote machine via rsync over SSH:
+
+```bash
+pkv sync-chroma --host fuertesito@Oriols-MacBook-Pro.local
+pkv sync-chroma --dry-run        # preview what would be synced
+```
+
+Configure default host in `~/.pkv/config.yaml`:
+```yaml
+sync_chroma:
+  host: fuertesito@Oriols-MacBook-Pro.local
+```
+
+Useful for syncing to an always-on machine for remote queries via Telegram/OpenClaw.
+
+### `pkv sync-bq`
+
+One-time full sync: push all ChromaDB vectors → BigQuery:
+
+```bash
+pkv sync-bq
+```
+
+Use this for initial backfill when switching to dual storage, or to repair BQ after outages.
+
 ### Other Commands
 
 ```bash
-pkv search "query"      # Semantic search across all documents
 pkv pipeline            # Run ingest → embed → cluster → enrich in one go
 pkv janitor             # Dedup chunks + fix frontmatter issues
 pkv stats               # Show vault statistics (doc count, embeddings, clusters)
@@ -297,8 +382,7 @@ entities: [John Smith, Project Alpha]
 
 ## Coming Soon
 
-- 📁 File watcher (auto-ingest on file drop)
-- 🔌 OpenClaw skill for natural language queries
+- 🔌 OpenClaw skill for natural language queries via Telegram
 - ⏰ Heartbeat cron (periodic context refresh)
 - 🌐 Web UI
 - 📧 More parsers (email .eml, .epub, audio transcripts)
@@ -313,7 +397,7 @@ pip install -e ".[gcp]"
 
 ### BigQuery Vector Store
 
-Use BigQuery instead of ChromaDB for vector storage:
+Use BigQuery instead of (or alongside) ChromaDB for vector storage:
 
 1. **Authenticate:**
    ```bash
@@ -322,14 +406,29 @@ Use BigQuery instead of ChromaDB for vector storage:
 
 2. **Update `config.yaml`:**
    ```yaml
+   # BigQuery only:
    storage_backend: bigquery
+
+   # Or keep both in sync (recommended):
+   storage_backend: dual
+
    bigquery:
-     project: ozpr-reporting-dev
-     dataset: dbt_oriol
-     table: pkv_oriol
+     project: your-gcp-project
+     dataset: your_dataset
+     table: pkv_vectors
    ```
 
-3. The table is created automatically on first use. All existing commands (`pkv embed`, `pkv search`, `pkv ask`, etc.) work transparently with BigQuery.
+3. The table is created automatically on first use. All existing commands (`pkv embed`, `pkv search`, `pkv ask`, etc.) work transparently.
+
+**Storage modes:**
+- `chromadb` (default) — local only, fastest
+- `bigquery` — cloud only
+- `dual` — writes to both ChromaDB + BigQuery, reads from ChromaDB. Best of both worlds: fast local queries + cloud access for remote/analytics
+
+**Initial backfill** (when switching to dual from chromadb-only):
+```bash
+pkv sync-bq   # one-time push of all ChromaDB vectors → BigQuery
+```
 
 **Notes:**
 - Uses brute-force cosine similarity — fast enough for <10K chunks
