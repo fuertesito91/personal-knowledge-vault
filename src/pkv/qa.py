@@ -7,7 +7,7 @@ import anthropic
 from .query.search import semantic_search
 
 
-def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10) -> dict:
+def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10, since: str | None = None) -> dict:
     """Answer a question using RAG over the vault.
 
     Returns dict with 'answer' and 'sources' (list of document titles).
@@ -18,7 +18,23 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10) -> d
             "Claude API key required. Set ANTHROPIC_API_KEY or claude_api_key in config."
         )
 
-    results = semantic_search(question, config, n_results=n_chunks)
+    # Fetch more if filtering by date
+    fetch_n = n_chunks * 10 if since else n_chunks
+    results = semantic_search(question, config, n_results=fetch_n)
+
+    if since:
+        from datetime import datetime, timedelta
+        if since == "today":
+            since_date = datetime.now().strftime("%Y-%m-%d")
+        elif since == "yesterday":
+            since_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        elif since == "week":
+            since_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        else:
+            since_date = since
+        results = [r for r in results if r["metadata"].get("document_date", "") >= since_date]
+        results = results[:n_chunks]
+
     if not results:
         return {"answer": "No relevant documents found. Have you run 'pkv embed'?", "sources": []}
 

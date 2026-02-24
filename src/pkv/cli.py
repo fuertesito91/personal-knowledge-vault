@@ -314,18 +314,22 @@ def stats(ctx):
 @cli.command()
 @click.argument("question")
 @click.option("--n", "-n", default=10, help="Number of context chunks to retrieve")
+@click.option("--since", default=None, help="Filter by document date (YYYY-MM-DD, or 'today', 'yesterday', 'week')")
 @click.pass_context
-def ask(ctx, question, n):
+def ask(ctx, question, n, since):
     """Ask a question and get an AI-synthesized answer from your vault."""
     from .qa import ask_question
     from rich.markdown import Markdown
     from rich.panel import Panel
 
     config = _get_config(ctx)
-    console.print(f"[blue]Searching vault for context...[/]\n")
+    console.print(f"[blue]Searching vault for context...[/]")
+    if since:
+        console.print(f"[blue]Filtering: since {since}[/]")
+    console.print()
 
     try:
-        result = ask_question(question, config, n_chunks=n)
+        result = ask_question(question, config, n_chunks=n, since=since)
     except ValueError as e:
         console.print(f"[red]{e}[/]")
         return
