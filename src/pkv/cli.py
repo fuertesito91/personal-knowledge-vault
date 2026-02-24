@@ -421,6 +421,53 @@ def sync_chroma(ctx, host, dest, dry_run):
         console.print("[red]rsync not found. Install with: brew install rsync[/]")
 
 
+@cli.command("sync-bq")
+@click.option("--collection", default="documents", help="Collection name to sync")
+@click.pass_context
+def sync_bq(ctx, collection):
+    """One-time full sync: push all ChromaDB vectors → BigQuery."""
+    config = _get_config(ctx)
+
+    from .storage.chromadb import ChromaVectorStore
+    from .storage.bigquery import BigQueryVectorStore
+
+    chroma = ChromaVectorStore(config["chroma_path"])
+    bq_cfg = config.get("bigquery", {})
+    bq = BigQueryVectorStore(
+        project=bq_cfg.get("project", "ozpr-reporting-dev"),
+        dataset=bq_cfg.get("dataset", "dbt_oriol"),
+        table=bq_cfg.get("table", "pkv_oriol"),
+    )
+
+    console.print(f"[blue]Reading all documents from ChromaDB...[/]")
+    data = chroma.get_all(collection)
+    total = len(data["ids"])
+    console.print(f"  Found {total} chunks")
+
+    if total == 0:
+        console.print("[yellow]Nothing to sync.[/]")
+        return
+
+    # Get embeddings too
+    all_data = chroma.get_by_ids(collection, data["ids"], include=["documents", "metadatas", "embeddings"])
+
+    batch_size = 500
+    synced = 0
+    for i in range(0, total, batch_size):
+        batch_end = min(i + batch_size, total)
+        bq.add_documents(
+            collection_name=collection,
+            ids=all_data["ids"][i:batch_end],
+            embeddings=all_data["embeddings"][i:batch_end],
+            documents=all_data["documents"][i:batch_end],
+            metadatas=all_data["metadatas"][i:batch_end],
+        )
+        synced += batch_end - i
+        console.print(f"  [green]Synced {synced}/{total}[/]")
+
+    console.print(f"\n[green]✓ All {total} chunks synced to BigQuery ({bq.full_table})[/]")
+
+
 @cli.command()
 @click.option("--enrich/--no-enrich", default=True, help="Run enrichment (default: on, use --no-enrich to skip)")
 @click.option("--debounce", default=5.0, help="Seconds to wait after last change before processing")

@@ -54,7 +54,13 @@ class VectorStoreBase(ABC):
 
 
 def get_vector_store(config: dict[str, Any]) -> VectorStoreBase:
-    """Factory: return the right vector store based on config."""
+    """Factory: return the right vector store based on config.
+
+    Backends:
+      - "chromadb" (default): local ChromaDB only
+      - "bigquery": BigQuery only
+      - "dual": writes to both ChromaDB + BigQuery, reads from ChromaDB
+    """
     backend = config.get("storage_backend", "chromadb")
 
     if backend == "bigquery":
@@ -68,5 +74,17 @@ def get_vector_store(config: dict[str, Any]) -> VectorStoreBase:
     elif backend == "chromadb":
         from .chromadb import ChromaVectorStore
         return ChromaVectorStore(config["chroma_path"])
+    elif backend == "dual":
+        from .chromadb import ChromaVectorStore
+        from .bigquery import BigQueryVectorStore
+        from .dual import DualVectorStore
+        bq_cfg = config.get("bigquery", {})
+        primary = ChromaVectorStore(config["chroma_path"])
+        secondary = BigQueryVectorStore(
+            project=bq_cfg.get("project", "ozpr-reporting-dev"),
+            dataset=bq_cfg.get("dataset", "dbt_oriol"),
+            table=bq_cfg.get("table", "pkv_oriol"),
+        )
+        return DualVectorStore(primary=primary, secondary=secondary)
     else:
         raise ValueError(f"Unknown storage_backend: {backend}")
