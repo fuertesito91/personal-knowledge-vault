@@ -1,8 +1,28 @@
 """Document embedding using sentence-transformers."""
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any
+
+
+def _extract_date_from_title(title: str) -> str | None:
+    """Extract ISO date from title like 'Meeting – 2026/02/16 11:00 GMT – Notes by Gemini'.
+
+    Also handles underscored format: '2026_02_24 10_00 GMT'.
+    Returns 'YYYY-MM-DD' or None.
+    """
+    # Match YYYY/MM/DD or YYYY_MM_DD
+    m = re.search(r'(\d{4})[/_](\d{2})[/_](\d{2})', title)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    # Match YYYYMMDD
+    m = re.search(r'(\d{4})(\d{2})(\d{2})', title)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 2000 <= y <= 2099 and 1 <= mo <= 12 and 1 <= d <= 31:
+            return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return None
 
 from rich.progress import Progress
 
@@ -56,13 +76,18 @@ class Embedder:
                 text = f"passage: {chunk.content}"
                 ids.append(chunk_id)
                 texts.append(text)
-                metadatas.append({
+                meta = {
                     "source": doc.source_path,
                     "title": doc.title,
                     "chunk_index": chunk.index,
                     "entity_type": doc.entity_type,
                     "content_hash": doc.content_hash,
-                })
+                }
+                # Extract date from title (e.g. "Meeting – 2026/02/16 11:00 GMT – Notes by Gemini")
+                doc_date = _extract_date_from_title(doc.title)
+                if doc_date:
+                    meta["document_date"] = doc_date
+                metadatas.append(meta)
 
         if not ids:
             return 0

@@ -161,31 +161,59 @@ def embed(ctx):
 @cli.command()
 @click.argument("query")
 @click.option("--n", "-n", default=5, help="Number of results")
+@click.option("--since", default=None, help="Filter by document date (YYYY-MM-DD, or 'today', 'yesterday', 'week')")
 @click.pass_context
-def search(ctx, query, n):
+def search(ctx, query, n, since):
     """Semantic search over the knowledge vault."""
     from .query.search import semantic_search
 
     config = _get_config(ctx)
-    console.print(f"[blue]Searching for: '{query}'[/]\n")
+    console.print(f"[blue]Searching for: '{query}'[/]")
+    if since:
+        console.print(f"[blue]Filtering: since {since}[/]")
+    console.print()
 
-    results = semantic_search(query, config, n_results=n)
+    # Fetch more results if filtering by date (we'll filter post-search)
+    fetch_n = n * 10 if since else n
+    results = semantic_search(query, config, n_results=fetch_n)
+
+    if since:
+        from datetime import datetime, timedelta
+        today = datetime.now().strftime("%Y-%m-%d")
+        if since == "today":
+            since_date = today
+        elif since == "yesterday":
+            since_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        elif since == "week":
+            since_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        else:
+            since_date = since
+
+        results = [
+            r for r in results
+            if r["metadata"].get("document_date", "") >= since_date
+        ]
+        results = results[:n]
 
     if not results:
         console.print("[yellow]No results found. Have you run 'pkv embed'?[/]")
+        if since:
+            console.print("[dim]Try without --since, or re-embed to populate document_date metadata.[/]")
         return
 
     table = Table(title="Search Results")
     table.add_column("#", style="dim", width=3)
     table.add_column("Title", style="cyan")
+    table.add_column("Date", style="yellow", width=10)
     table.add_column("Score", justify="right", style="green")
     table.add_column("Preview", max_width=60)
 
     for i, r in enumerate(results, 1):
         title = r["metadata"].get("title", "Unknown")
+        doc_date = r["metadata"].get("document_date", "—")
         score = f"{1 - r['distance']:.3f}"
         preview = r["document"][:80].replace("\n", " ")
-        table.add_row(str(i), title, score, preview)
+        table.add_row(str(i), title, doc_date, score, preview)
 
     console.print(table)
 
@@ -365,6 +393,61 @@ def _run_sync_if_enabled(config: dict):
             console.print(f"  [green]✓ Drive sync: {stats['uploaded']} uploaded[/]")
         except Exception as e:
             console.print(f"  [red]✗ Drive sync failed: {e}[/]")
+
+
+@cli.command("list-docs")
+@click.option("--since", default=None, help="Filter by date (YYYY-MM-DD, 'today', 'yesterday', 'week')")
+@click.pass_context
+def list_docs(ctx, since):
+    """List all unique documents in the vault (by title and date)."""
+    from datetime import datetime, timedelta
+
+    config = _get_config(ctx)
+    from .storage import get_vector_store
+    store = get_vector_store(config)
+    data = store.get_all("documents")
+
+    # Deduplicate by title
+    docs = {}
+    for meta in data["metadatas"]:
+        title = meta.get("title", "Unknown")
+        if title not in docs:
+            docs[title] = {
+                "date": meta.get("document_date", ""),
+                "type": meta.get("entity_type", ""),
+                "chunks": 0,
+            }
+        docs[title]["chunks"] += 1
+
+    if since:
+        today = datetime.now().strftime("%Y-%m-%d")
+        if since == "today":
+            since_date = today
+        elif since == "yesterday":
+            since_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        elif since == "week":
+            since_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        else:
+            since_date = since
+        docs = {t: d for t, d in docs.items() if d["date"] >= since_date}
+
+    if not docs:
+        console.print("[yellow]No documents found.[/]")
+        return
+
+    # Sort by date descending
+    sorted_docs = sorted(docs.items(), key=lambda x: x[1]["date"] or "", reverse=True)
+
+    table = Table(title=f"Vault Documents ({len(sorted_docs)})")
+    table.add_column("Date", style="yellow", width=10)
+    table.add_column("Type", style="dim", width=10)
+    table.add_column("Title", style="cyan")
+    table.add_column("Chunks", justify="right", style="green")
+
+    for title, info in sorted_docs:
+        table.add_row(info["date"] or "—", info["type"], title, str(info["chunks"]))
+
+    console.print(table)
 
 
 @cli.command("sync-chroma")
