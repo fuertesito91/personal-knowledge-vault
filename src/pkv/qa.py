@@ -41,49 +41,43 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10, sinc
         else:
             since_date = since
 
-    # For date queries: get ALL chunks matching the date range first,
-    # then supplement with semantic search results
+    # For date queries: scan vault filenames for matching dates, read directly
     if since_date:
-        from .storage import get_vector_store
-        store = get_vector_store(config)
-        all_data = store.get_all("documents")
-        
-        # Filter chunks by document_date metadata
+        import re
+        from pathlib import Path
+
+        vault_path = Path(config["vault_path"])
         date_results = []
-        seen_ids = set()
-        if all_data and all_data.get("ids"):
-            for i, doc_id in enumerate(all_data["ids"]):
-                meta = all_data["metadatas"][i] if all_data.get("metadatas") else {}
-                doc_date = meta.get("document_date", "")
-                if doc_date >= since_date:
-                    date_results.append({
-                        "id": doc_id,
-                        "document": all_data["documents"][i] if all_data.get("documents") else "",
-                        "metadata": meta,
-                        "distance": 0,
-                    })
-                    seen_ids.add(doc_id)
-        
-        # Also get semantic results and merge (avoiding duplicates)
+
+        # Scan all vault files for date patterns in filenames
+        for f in sorted(vault_path.rglob("*.md")):
+            # Extract date from filename (YYYY/MM/DD, YYYY_MM_DD, YYYYMMDD)
+            m = re.search(r'(\d{4})[/_](\d{2})[/_](\d{2})', f.name)
+            if not m:
+                m = re.search(r'(\d{4})(\d{2})(\d{2})', f.name)
+            if not m:
+                continue
+
+            file_date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+            if file_date >= since_date:
+                # Read first ~2000 chars for context (enough for summary)
+                content = f.read_text(errors="replace")[:2000]
+                title = f.stem
+                date_results.append({
+                    "id": str(f),
+                    "document": content,
+                    "metadata": {"title": title, "document_date": file_date, "source": str(f)},
+                    "distance": 0,
+                })
+
+        # Also include semantic search results for the question
         semantic_results = semantic_search(question, config, n_results=n_chunks)
+        seen_titles = {r["metadata"].get("title", "") for r in date_results}
         for r in semantic_results:
-            if r["id"] not in seen_ids:
+            if r["metadata"].get("title", "") not in seen_titles:
                 date_results.append(r)
-                seen_ids.add(r["id"])
-        
-        # Deduplicate by title — keep first chunk per document for breadth
-        title_seen = {}
-        deduped = []
-        for r in date_results:
-            title = r["metadata"].get("title", "Unknown")
-            if title not in title_seen:
-                title_seen[title] = 0
-            title_seen[title] += 1
-            # Keep up to 2 chunks per document
-            if title_seen[title] <= 2:
-                deduped.append(r)
-        
-        results = deduped[:n_chunks * 2]  # Allow more chunks for date queries
+
+        results = date_results
     else:
         results = semantic_search(question, config, n_results=n_chunks)
 
