@@ -76,8 +76,8 @@ class FileWatcher:
         try:
             self._process_batch_inner(paths)
         except Exception as e:
-            console.print(f"  [red]✗ BATCH CRASHED: {e}[/]")
-            console.print(f"  [red]{traceback.format_exc()}[/]")
+            print(f"BATCH CRASHED: {e}", flush=True)
+            traceback.print_exc()
             sys.stdout.flush()
             sys.stderr.flush()
 
@@ -133,6 +133,7 @@ class FileWatcher:
             console.print(f"  [red]{_tb.format_exc()}[/]")
 
         # 4. Cluster
+        clusters = None
         try:
             clusters = run_clustering(self.config)
             if clusters:
