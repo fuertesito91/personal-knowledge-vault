@@ -19,6 +19,7 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10, sinc
         )
 
     # Auto-detect date queries and apply since filter
+    from datetime import datetime, timedelta
     if not since:
         q_lower = question.lower()
         if any(w in q_lower for w in ["today", "this morning", "this afternoon"]):
@@ -28,12 +29,9 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10, sinc
         elif any(w in q_lower for w in ["this week", "past week", "last few days"]):
             since = "week"
 
-    # Fetch more if filtering by date
-    fetch_n = n_chunks * 10 if since else n_chunks
-    results = semantic_search(question, config, n_results=fetch_n)
-
+    # Resolve since to a date string
+    since_date = None
     if since:
-        from datetime import datetime, timedelta
         if since == "today":
             since_date = datetime.now().strftime("%Y-%m-%d")
         elif since == "yesterday":
@@ -42,8 +40,52 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10, sinc
             since_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         else:
             since_date = since
-        results = [r for r in results if r["metadata"].get("document_date", "") >= since_date]
-        results = results[:n_chunks]
+
+    # For date queries: get ALL chunks matching the date range first,
+    # then supplement with semantic search results
+    if since_date:
+        from .storage import get_vector_store
+        store = get_vector_store(config)
+        all_data = store.get_all("documents")
+        
+        # Filter chunks by document_date metadata
+        date_results = []
+        seen_ids = set()
+        if all_data and all_data.get("ids"):
+            for i, doc_id in enumerate(all_data["ids"]):
+                meta = all_data["metadatas"][i] if all_data.get("metadatas") else {}
+                doc_date = meta.get("document_date", "")
+                if doc_date >= since_date:
+                    date_results.append({
+                        "id": doc_id,
+                        "document": all_data["documents"][i] if all_data.get("documents") else "",
+                        "metadata": meta,
+                        "distance": 0,
+                    })
+                    seen_ids.add(doc_id)
+        
+        # Also get semantic results and merge (avoiding duplicates)
+        semantic_results = semantic_search(question, config, n_results=n_chunks)
+        for r in semantic_results:
+            if r["id"] not in seen_ids:
+                date_results.append(r)
+                seen_ids.add(r["id"])
+        
+        # Deduplicate by title — keep first chunk per document for breadth
+        title_seen = {}
+        deduped = []
+        for r in date_results:
+            title = r["metadata"].get("title", "Unknown")
+            if title not in title_seen:
+                title_seen[title] = 0
+            title_seen[title] += 1
+            # Keep up to 2 chunks per document
+            if title_seen[title] <= 2:
+                deduped.append(r)
+        
+        results = deduped[:n_chunks * 2]  # Allow more chunks for date queries
+    else:
+        results = semantic_search(question, config, n_results=n_chunks)
 
     if not results:
         return {"answer": "No relevant documents found. Have you run 'pkv embed'?", "sources": []}
