@@ -18,6 +18,16 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10, sinc
             "Claude API key required. Set ANTHROPIC_API_KEY or claude_api_key in config."
         )
 
+    # Auto-detect date queries and apply since filter
+    if not since:
+        q_lower = question.lower()
+        if any(w in q_lower for w in ["today", "this morning", "this afternoon"]):
+            since = "today"
+        elif "yesterday" in q_lower:
+            since = "yesterday"
+        elif any(w in q_lower for w in ["this week", "past week", "last few days"]):
+            since = "week"
+
     # Fetch more if filtering by date
     fetch_n = n_chunks * 10 if since else n_chunks
     results = semantic_search(question, config, n_results=fetch_n)
@@ -51,12 +61,18 @@ def ask_question(question: str, config: dict[str, Any], n_chunks: int = 10, sinc
     client = anthropic.Anthropic(api_key=api_key)
     model = config.get("claude_model", "claude-opus-4-0725")
 
+    from datetime import datetime
+    today = datetime.now().strftime("%A, %Y-%m-%d")
+
     response = client.messages.create(
         model=model,
         max_tokens=2000,
-        system="You are a helpful assistant answering questions based on the user's personal knowledge base. "
-               "Use ONLY the provided context to answer. If the context doesn't contain enough information, say so. "
-               "Reference specific documents by their titles when relevant.",
+        system=f"You are a helpful assistant answering questions based on the user's personal knowledge base. "
+               f"Today is {today}. "
+               f"Use ONLY the provided context to answer. If the context doesn't contain enough information, say so. "
+               f"Reference specific documents by their titles when relevant. "
+               f"Document titles often contain dates in formats like 'YYYY/MM/DD' or 'YYYYMMDD'. Use these to answer date-related questions. "
+               f"Be direct and concise — answer the question, don't hedge unnecessarily.",
         messages=[{
             "role": "user",
             "content": f"Context from my knowledge vault:\n\n{context}\n\n---\n\nQuestion: {question}",
