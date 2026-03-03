@@ -71,6 +71,18 @@ class FileWatcher:
 
     def _process_batch(self, paths: list[str]):
         """Run pipeline on a batch of detected files."""
+        import sys
+        import traceback
+        try:
+            self._process_batch_inner(paths)
+        except Exception as e:
+            console.print(f"  [red]✗ BATCH CRASHED: {e}[/]")
+            console.print(f"  [red]{traceback.format_exc()}[/]")
+            sys.stdout.flush()
+            sys.stderr.flush()
+
+    def _process_batch_inner(self, paths: list[str]):
+        """Actual batch processing logic."""
         from .ingest.processor import process_file
         from .vault.writer import VaultWriter
         from .embeddings.embedder import Embedder
@@ -100,19 +112,25 @@ class FileWatcher:
             console.print(f"  [green]✓ Wrote {len(written)} document(s) to vault[/]")
         except Exception as e:
             console.print(f"  [red]✗ Vault write failed: {e}[/]")
-            return
+            # Don't return — still try to embed existing vault files
 
         # 3. Embed
         try:
             from .ingest.processor import process_directory
+            import traceback as _tb
             vault_path = Path(self.config["vault_path"])
+            console.print("  [dim]Loading vault for embedding...[/]")
             all_docs = process_directory(vault_path, self.config)
+            console.print(f"  [dim]Found {len(all_docs)} docs, embedding new chunks...[/]")
             if all_docs:
                 embedder = Embedder(self.config)
                 count = embedder.embed_documents(all_docs)
                 console.print(f"  [green]✓ Embedded {count} new chunk(s)[/]")
+            else:
+                console.print("  [yellow]No documents found in vault to embed[/]")
         except Exception as e:
             console.print(f"  [red]✗ Embedding failed: {e}[/]")
+            console.print(f"  [red]{_tb.format_exc()}[/]")
 
         # 4. Cluster
         try:
@@ -121,6 +139,8 @@ class FileWatcher:
                 console.print(f"  [green]✓ Found {len(clusters)} cluster(s)[/]")
         except Exception as e:
             console.print(f"  [red]✗ Clustering failed: {e}[/]")
+            import traceback as _tb2
+            console.print(f"  [red]{_tb2.format_exc()}[/]")
 
         # 5. Enrich (optional)
         if self.enrich:
@@ -130,8 +150,12 @@ class FileWatcher:
                 if clusters:
                     results = enricher.enrich_clusters(clusters)
                     console.print(f"  [green]✓ Enriched {len(results)} cluster(s)[/]")
+                else:
+                    console.print("  [dim]No clusters to enrich[/]")
             except Exception as e:
                 console.print(f"  [red]✗ Enrichment failed: {e}[/]")
+                import traceback as _tb3
+                console.print(f"  [red]{_tb3.format_exc()}[/]")
 
         # 6. Sync to Drive if enabled
         if self.config.get("vault_sync", "local") == "gdrive":
@@ -145,6 +169,9 @@ class FileWatcher:
 
         console.print("[bold green]✓ Batch complete![/]\n")
         console.print("[dim]👀 Watching for more files...[/]")
+        import sys
+        sys.stdout.flush()
+        sys.stderr.flush()
 
     def run(self):
         """Start watching (blocks until Ctrl+C)."""
