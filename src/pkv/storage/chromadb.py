@@ -32,6 +32,7 @@ class ChromaVectorStore(VectorStoreBase):
     ) -> None:
         collection = self.get_or_create_collection(collection_name)
         collection.add(ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
+        self._invalidate_id_cache(collection_name)
 
     def query(
         self,
@@ -55,9 +56,22 @@ class ChromaVectorStore(VectorStoreBase):
         return collection.count()
 
     def has_id(self, collection_name: str, doc_id: str) -> bool:
-        collection = self.get_or_create_collection(collection_name)
-        result = collection.get(ids=[doc_id])
-        return len(result["ids"]) > 0
+        ids = self.get_all_ids(collection_name)
+        return doc_id in ids
+
+    def get_all_ids(self, collection_name: str) -> set[str]:
+        """Return all IDs in a collection as a set (cached per call)."""
+        cache_key = f"_ids_cache_{collection_name}"
+        if not hasattr(self, cache_key):
+            collection = self.get_or_create_collection(collection_name)
+            result = collection.get(include=[])
+            setattr(self, cache_key, set(result["ids"]))
+        return getattr(self, cache_key)
+
+    def _invalidate_id_cache(self, collection_name: str):
+        cache_key = f"_ids_cache_{collection_name}"
+        if hasattr(self, cache_key):
+            delattr(self, cache_key)
 
     def get_by_ids(self, collection_name: str, ids: list[str], include: list[str] | None = None) -> dict[str, Any]:
         collection = self.get_or_create_collection(collection_name)
